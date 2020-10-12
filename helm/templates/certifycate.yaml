@@ -1,0 +1,54 @@
+# Create a selfsigned Issuer, in order to create a root CA certificate for
+# signing webhook serving certificates
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "kube-admission.fullname" . }}-selfsign
+  labels:
+    {{- include "kube-admission.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+# Generate a CA Certificate used to sign certificates for the webhook
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "kube-admission.fullname" . }}-ca
+  labels:
+    {{- include "kube-admission.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "kube-admission.fullname" . }}-ca
+  duration: 43800h # 5y
+  issuerRef:
+    name: {{ include "kube-admission.fullname" . }}-selfsign
+  commonName: ca.{{ include "kube-admission.fullname" . }}.{{ .Release.Namespace }}
+  isCA: true
+---
+# Create an Issuer that uses the above generated CA certificate to issue certs
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "kube-admission.fullname" . }}-ca
+  labels:
+    {{- include "kube-admission.labels" . | nindent 4 }}
+spec:
+  ca:
+    secretName: {{ include "kube-admission.fullname" . }}-ca
+---
+# Finally, generate a serving certificate for the webhook to use
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "kube-admission.fullname" . }}-tls
+  labels:
+    {{- include "kube-admission.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "kube-admission.fullname" . }}-tls
+  duration: 8760h # 1y
+  issuerRef:
+    name: {{ include "kube-admission.fullname" . }}-ca
+  dnsNames:
+  - {{ include "kube-admission.fullname" . }}
+  - {{ include "kube-admission.fullname" . }}.{{ .Release.Namespace }}
+  - {{ include "kube-admission.fullname" . }}.{{ .Release.Namespace }}.svc
+  - {{ include "kube-admission.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomainSuffix }}

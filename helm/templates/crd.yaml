@@ -1,0 +1,17 @@
+{{- range .Values.crds }}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+{{- if not .spec.group }}
+{{- $_ := set .spec "group" $.Values.apiGroupName }}
+{{- end }}
+metadata:
+  name: {{ .spec.names.plural }}.{{ .spec.group }}
+  labels:
+    {{- include "kube-admission.labels" $ | nindent 4 }}
+    {{- range $k, $v := .labels }}
+      {{ $k | nindent 4 }}: {{ $v }}
+    {{- end }}
+spec:
+  {{- .spec | toYaml | nindent 2 }}
+---
+{{- end }}

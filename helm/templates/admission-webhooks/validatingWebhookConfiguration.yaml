@@ -1,0 +1,37 @@
+{{- if .Values.admissionWebhooks.validate.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name:  {{ include "kube-admission.fullname" . }}
+  labels:
+    {{- include "kube-admission.labels" . | nindent 4 }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "kube-admission.fullname" . }}-ca
+webhooks:
+- name: {{ include "kube-admission.fullname" . }}.{{ .Values.apiGroupName }}
+  rules:
+  - apiGroups:
+    - {{ .Values.apiGroupName }}
+    apiVersions:
+    - "*"
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - "*/*"
+    scope: Namespaced
+  clientConfig:
+    service:
+      namespace: {{ .Release.Namespace }}
+      name: {{ include "kube-admission.fullname" . }}
+      path: /api/v1alpha1/validate
+      port: 443
+    # caBundle: "Ci0tLS0tQk...<base64-encoded PEM bundle containing the CA that signed the webhook's serving certificate>...tLS0K"
+  admissionReviewVersions:
+  - v1
+  - v1beta1
+  sideEffects: NoneOnDryRun
+  timeoutSeconds: 5
+  matchPolicy: Equivalent
+{{- end }}

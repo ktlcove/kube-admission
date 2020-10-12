@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kube-admission.fullname" . }}
+  labels:
+    {{- include "kube-admission.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "kube-admission.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+    {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      labels:
+        {{- include "kube-admission.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "kube-admission.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: nginx
+        image: nginx
+        ports:
+         - name: https
+           containerPort: 443
+           protocol: TCP
+        volumeMounts:
+        - name: nginx-configuration
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: conf.d-default.conf
+        - name: tls-cert
+          mountPath: /etc/nginx/certs
+          readOnly: true
+      - name: {{ .Chart.Name }}
+        image: '{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}'
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        {{- if .Values.container.command }}
+        command:
+        {{- .Values.container.command | toYaml | nindent 8 }}
+        {{- end }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.container.httpPort }}
+          protocol: TCP
+
+        {{- if or .Values.hack.configMapEnv .Values.hack.env }}
+        env:
+
+        {{- if .Values.hack.configMapEnv }}
+        {{- range $k, $v := .Values.hack.configMapEnv.items }}
+        - name: {{ $k }}
+          valueFrom:
+            configMapKeyRef:
+              name: {{ $.Values.hack.configMapEnv.name }}
+              key: {{ $v }}
+        {{- end }}
+        {{- end }}
+
+        {{- if .Values.hack.env }}
+        {{- range $k, $v := .Values.hack.env }}
+        - name: {{ $k }}
+          value: {{ $v }}
+        {{- end }}
+        {{- end }}
+
+        {{- end }}
+      volumes:
+      - name: nginx-configuration
+        configMap:
+          name: {{ include "kube-admission.fullname" . }}-nginx-configuration
+      - name: tls-cert
+        secret:
+          secretName: {{ include "kube-admission.fullname" . }}-tls
